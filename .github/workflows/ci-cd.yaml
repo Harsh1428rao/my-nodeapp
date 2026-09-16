@@ -12,13 +12,10 @@ env:
   IMAGE_NAME: harsh4244rao/my-node-app
 
 jobs:
-
   build-test-push:
-
     runs-on: self-hosted
 
     steps:
-
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -47,20 +44,17 @@ jobs:
             $IMAGE_NAME:${{ github.sha }}
 
   deploy:
-
     needs: build-test-push
-
     runs-on: self-hosted
 
     steps:
-
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Deploy to Kubernetes
         run: |
           kubectl set image deployment/my-nodeapp \
-            my-nodeapp=$IMAGE_NAME:${{ github.sha }}
+            node-app=$IMAGE_NAME:${{ github.sha }}
 
       - name: Wait for rollout
         run: |
