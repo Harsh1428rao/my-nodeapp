@@ -60,7 +60,7 @@ jobs:
       - name: Deploy to Kubernetes
         run: |
           kubectl set image deployment/my-nodeapp \
-            nodeapp=$IMAGE_NAME:${{ github.sha }}
+            my-nodeapp=$IMAGE_NAME:${{ github.sha }}
 
       - name: Wait for rollout
         run: |
