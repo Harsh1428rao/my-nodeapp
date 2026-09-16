@@ -4,7 +4,7 @@ const PORT = 3000;
 
 const server = http.createServer((req, res) => {
   res.writeHead(200, { "Content-Type": "text/plain" });
-  res.end("Hello from Node.js CI/CD!");
+  res.end("Hello from my automated Kubernetes deployment!");
 });
 
 server.listen(PORT, () => {
