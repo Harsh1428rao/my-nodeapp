@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: my-nodeapp
+
+spec:
+  replicas: 2
+
+  selector:
+    matchLabels:
+      app: my-nodeapp
+
+  template:
+    metadata:
+      labels:
+        app: my-nodeapp
+
+    spec:
+      containers:
+        - name: node-app
+          image: harsh4244rao/my-nodeapp:v1
+
+          ports:
+            - containerPort: 3000
+
+          imagePullPolicy: Always
+
+---
+apiVersion: v1
+kind: Service
+
+metadata:
+  name: my-node-app-service
+
+spec:
+  selector:
+    app: my-nodeapp
+
+  ports:
+    - port: 3000
+      targetPort: 3000
+
+  type: LoadBalancer
