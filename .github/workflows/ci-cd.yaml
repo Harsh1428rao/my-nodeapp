@@ -7,54 +7,99 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 env:
-  IMAGE_NAME: harsh4244rao/my-node-app
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: my-node-app
+  EKS_CLUSTER_NAME: my-nodeapp-cluster
+  IMAGE_TAG: ${{ github.sha }}
 
 jobs:
-  build-test-push:
-    runs-on: self-hosted
+
+  build-and-push:
+    runs-on: ubuntu-latest
 
     steps:
+
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Check Node.js
-        run: node --version
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
 
       - name: Install dependencies
         run: npm ci
 
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::509461666868:role/GitHubActionsEKSDeployRole
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify AWS identity
+        run: |
+          aws sts get-caller-identity
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
       - name: Build Docker image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
           docker build \
-            -t $IMAGE_NAME:${{ github.sha }} \
+            --platform linux/amd64 \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
             .
 
-      - name: Login to Docker Hub
-        run: |
-          echo "${{ secrets.DOCKERHUB_TOKEN }}" | \
-          docker login \
-            -u "${{ secrets.DOCKERHUB_USERNAME }}" \
-            --password-stdin
-
-      - name: Push Docker image
+      - name: Push Docker image to ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
           docker push \
-            $IMAGE_NAME:${{ github.sha }}
+            $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
   deploy:
-    needs: build-test-push
-    runs-on: self-hosted
+    needs: build-and-push
+    runs-on: ubuntu-latest
 
     steps:
+
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Deploy to Kubernetes
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::509461666868:role/GitHubActionsEKSDeployRole
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig \
+            --region $AWS_REGION \
+            --name $EKS_CLUSTER_NAME
+
+      - name: Verify EKS access
+        run: |
+          kubectl get nodes
+
+      - name: Deploy application
+        env:
+          ECR_REGISTRY: 509461666868.dkr.ecr.us-east-1.amazonaws.com
         run: |
           kubectl set image deployment/my-nodeapp \
-            node-app=$IMAGE_NAME:${{ github.sha }}
+            node-app=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+      - name: Verify deployment
+        run: |
+          kubectl get deployment my-nodeapp
+          kubectl get pods -o wide
 
       - name: Wait for rollout
         run: |
