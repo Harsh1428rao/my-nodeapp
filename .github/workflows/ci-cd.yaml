@@ -34,7 +34,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Debug GitHub OIDC context
+      - name: Debug GitHub Actions context
         run: |
           echo "Repository: ${{ github.repository }}"
           echo "Ref: ${{ github.ref }}"
@@ -42,6 +42,54 @@ jobs:
           echo "Event: ${{ github.event_name }}"
           echo "Actor: ${{ github.actor }}"
 
+      - name: Debug GitHub OIDC claims
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "Requesting GitHub OIDC token..."
+
+          RESPONSE=$(curl -sS \
+            -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL")
+
+          TOKEN=$(echo "$RESPONSE" | python3 -c '
+          import sys
+          import json
+          print(json.load(sys.stdin)["value"])
+          ')
+
+          PAYLOAD=$(echo "$TOKEN" | cut -d "." -f 2)
+
+          python3 - "$PAYLOAD" <<'PY'
+          import sys
+          import json
+          import base64
+
+          payload = sys.argv[1]
+          payload += "=" * (-len(payload) % 4)
+
+          claims = json.loads(
+              base64.urlsafe_b64decode(payload).decode()
+          )
+
+          print("")
+          print("===== GitHub OIDC Claims =====")
+
+          for key in [
+              "sub",
+              "aud",
+              "repository",
+              "repository_owner",
+              "ref",
+              "event_name",
+              "job_workflow_ref"
+          ]:
+              print(f"{key}: {claims.get(key)}")
+
+          print("==============================")
+          print("")
+          PY
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -72,6 +120,7 @@ jobs:
         run: |
           docker push \
             $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
 
   deploy:
     needs: build-and-push
